@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Scratch/diagnostic scripts (CommonJS, not part of app bundle)
+    "tests/scratch-*.cjs",
+    "tests/scratch-*.js",
   ]),
 ]);
 
