@@ -489,7 +489,8 @@ export default function Home() {
             timestamp: new Date().toLocaleTimeString(),
           },
         ]);
-      } else if (data.error) {
+      }
+      if (data.error && (!res.ok || !data.reply)) {
         setChatError(data.error);
       }
 

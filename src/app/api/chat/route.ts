@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { runGeminiChat } from "@/lib/gemini";
+import { parseGeminiError, logGeminiDiagnostic } from "@/lib/gemini-errors";
 
 // Zod validation for chat request payload
 const ChatRequestSchema = z.object({
@@ -92,22 +93,29 @@ export async function POST(req: NextRequest) {
       isLiveGemini: true,
     });
   } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : "Error executing chat turn";
+    const classified = parseGeminiError(err);
+    logGeminiDiagnostic(classified, "api/chat");
 
-    // Clean any potential secret traces
-    const sanitizedError = errorMsg.replace(/AIza[0-9A-Za-z-_]{35}/g, "[REDACTED_API_KEY]");
-    console.error("Gemini Chat API Error:", sanitizedError);
+    const responseHeaders: Record<string, string> = {
+      "Cache-Control": "no-store",
+    };
+    if (classified.retryAfterSeconds !== undefined) {
+      responseHeaders["Retry-After"] = String(classified.retryAfterSeconds);
+    }
 
     return NextResponse.json(
       {
         success: false,
-        errorCode: "GEMINI_ERROR",
-        error: sanitizedError,
-        reply:
-          "I encountered an issue connecting to the Gemini service. Please check your API key quota or try repeating your message.",
+        errorCode: classified.errorCode,
+        upstreamStatus: classified.upstreamStatus,
+        error: classified.sanitizedMessage,
+        reply: classified.userReply,
         toolCalls: [],
       },
-      { status: 500 }
+      {
+        status: classified.httpStatus,
+        headers: responseHeaders,
+      }
     );
   }
 }

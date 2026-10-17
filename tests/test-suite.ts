@@ -19,7 +19,10 @@ async function runMasterTestSuite() {
   // Suite 2: Gemini Scenarios
   await import("./gemini-scenarios.test");
 
-  // Suite 3: Post-Call Summary
+  // Suite 3: Gemini Error Classification & Redaction
+  await import("./gemini-errors.test");
+
+  // Suite 4: Post-Call Summary
   await import("./summary.test");
 
   console.log("\n############################################################");

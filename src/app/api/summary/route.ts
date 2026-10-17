@@ -29,6 +29,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { z } from "zod";
 import { CallSummarySchema, CallSummary, TranscriptMessage } from "@/lib/types";
 import { generateDeterministicSummary } from "@/lib/summary";
+import { parseGeminiError, logGeminiDiagnostic } from "@/lib/gemini-errors";
 
 // ─── Request schema ───────────────────────────────────────────────────────────
 
@@ -90,9 +91,10 @@ export async function POST(req: NextRequest) {
       try {
         summary = await generateGeminiSummary(turns, apiKey);
       } catch (err) {
+        const classified = parseGeminiError(err);
+        logGeminiDiagnostic(classified, "summary");
         console.warn(
-          "[summary] Gemini unavailable, using deterministic fallback:",
-          err instanceof Error ? err.message : err
+          `[summary] Gemini unavailable (HTTP ${classified.upstreamStatus || classified.httpStatus} ${classified.errorCode}), using deterministic fallback.`
         );
         summary = generateDeterministicSummary(turns);
         usedFallback = true;
@@ -135,11 +137,8 @@ export async function POST(req: NextRequest) {
     );
   } catch (err: unknown) {
     // Never expose stack traces or API keys
-    const msg =
-      err instanceof Error
-        ? err.message.replace(/AIza[0-9A-Za-z-_]{35}/g, "[REDACTED]")
-        : "Summary generation error";
-    console.error("[summary] Unhandled error:", msg);
+    const classified = parseGeminiError(err);
+    logGeminiDiagnostic(classified, "summary");
     return NextResponse.json(
       { success: false, error: "Failed to generate call summary. Please retry." },
       { status: 500, headers }
@@ -153,7 +152,7 @@ async function generateGeminiSummary(
   messages: TranscriptMessage[],
   apiKey: string
 ): Promise<CallSummary> {
-  const modelName = process.env.GEMINI_MODEL ?? "gemini-1.5-flash";
+  const modelName = process.env.GEMINI_MODEL ?? "gemini-3.5-flash";
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: modelName });
 
